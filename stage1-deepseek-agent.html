@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Stage 1 — 用 DeepSeek 写一个最小 Agent</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+SC:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#15171a;
+    --soft:#5c626b;
+    --faint:#8b919a;
+    --line:#e4e6ea;
+    --line-2:#eef0f3;
+    --bg:#ffffff;
+    --chip:#f6f7f9;
+    --accent:#4d6bfe;      /* deepseek blue */
+    --accent-soft:#eef1ff;
+    --green:#15803d;
+    --green-soft:#f1f9f3;
+    --amber:#b45309;
+    --amber-soft:#fef6ec;
+    /* code theme (dark) */
+    --code-bg:#0f1117;
+    --code-fg:#e6e6e6;
+    --c-kw:#c792ea;
+    --c-str:#c3e88d;
+    --c-fn:#82aaff;
+    --c-num:#f78c6c;
+    --c-com:#637777;
+    --c-cls:#ffcb6b;
+    --mono:'JetBrains Mono',monospace;
+    --serif:'Fraunces',Georgia,serif;
+    --sc:'Noto Sans SC',sans-serif;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{background:var(--bg);color:var(--ink);font-family:var(--sc);line-height:1.65;-webkit-font-smoothing:antialiased}
+  .sheet{max-width:840px;margin:0 auto;padding:48px 38px 80px}
+
+  /* header */
+  .eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--accent);margin-bottom:10px}
+  h1{font-family:var(--serif);font-weight:500;font-size:clamp(30px,5vw,44px);line-height:1.08;letter-spacing:-.01em;margin-bottom:10px}
+  .sub{color:var(--soft);font-size:15px;max-width:64ch}
+  .setup{
+    margin-top:20px;background:var(--chip);border:1px solid var(--line);
+    border-radius:10px;padding:14px 18px;font-family:var(--mono);font-size:12.5px;color:var(--soft);line-height:1.9;
+  }
+  .setup .cmt{color:var(--faint)}
+  .setup b{color:var(--accent);font-weight:500}
+  .rule{height:1px;background:var(--line);margin:30px 0 34px}
+
+  /* loop strip */
+  .loop{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-family:var(--mono);font-size:12px;color:var(--soft);margin-bottom:30px}
+  .loop span{background:var(--accent-soft);color:var(--accent);padding:5px 12px;border-radius:6px;font-weight:500}
+  .loop i{color:var(--faint);font-style:normal}
+
+  /* step */
+  .step{margin-bottom:38px}
+  .step-head{display:flex;align-items:baseline;gap:12px;margin-bottom:6px}
+  .step-n{font-family:var(--mono);font-weight:700;font-size:13px;color:var(--bg);background:var(--ink);width:26px;height:26px;border-radius:7px;display:grid;place-items:center;flex-shrink:0}
+  .step h2{font-family:var(--serif);font-weight:500;font-size:21px;letter-spacing:-.01em}
+  .step h2 .en{font-family:var(--mono);font-size:11px;color:var(--faint);font-weight:400;letter-spacing:.03em;margin-left:6px}
+  .step .gist{color:var(--soft);font-size:14px;margin:4px 0 12px;padding-left:38px}
+  .step .gist b{color:var(--ink);font-weight:600}
+
+  /* code block */
+  pre{background:var(--code-bg);border-radius:10px;padding:16px 18px;overflow-x:auto;margin:0 0 12px;font-family:var(--mono);font-size:12.5px;line-height:1.7;color:var(--code-fg)}
+  pre .kw{color:var(--c-kw)}
+  pre .str{color:var(--c-str)}
+  pre .fn{color:var(--c-fn)}
+  pre .num{color:var(--c-num)}
+  pre .com{color:var(--c-com);font-style:italic}
+  pre .cls{color:var(--c-cls)}
+  pre .b{font-weight:700}
+
+  /* notes */
+  .note{display:flex;gap:10px;font-size:13px;padding:10px 14px;border-radius:8px;margin-bottom:6px}
+  .note.pit{background:var(--amber-soft);color:#7c4a02}
+  .note.pit .ic{color:var(--amber);font-weight:700;font-family:var(--mono)}
+  .note.ok{background:var(--green-soft);color:#1c5a30}
+  .note.ok .ic{color:var(--green);font-weight:700;font-family:var(--mono)}
+  .note b{font-weight:600}
+
+  /* output box */
+  .out{background:#0f1117;border-radius:10px;padding:14px 18px;margin:0 0 12px;font-family:var(--mono);font-size:12px;line-height:1.7;color:#b8c0cc}
+  .out .lbl{color:var(--c-fn)}
+  .out .hl{color:var(--c-str);font-weight:700}
+
+  /* summary table */
+  .summary{margin-top:8px}
+  .summary h3{font-family:var(--serif);font-weight:500;font-size:20px;margin-bottom:14px}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th,td{text-align:left;padding:10px 12px;vertical-align:top}
+  thead th{font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);font-weight:600;border-bottom:1.5px solid var(--ink)}
+  tbody tr{border-bottom:1px solid var(--line-2)}
+  tbody td:first-child{font-weight:700;font-family:var(--mono);color:var(--accent);width:8%}
+  td code{font-family:var(--mono);font-size:11.5px;background:var(--chip);padding:2px 6px;border-radius:4px;color:var(--ink)}
+
+  /* cross-API + debug notes */
+  .callout{margin-top:22px;border-radius:10px;padding:16px 20px;font-size:13.5px;color:var(--soft)}
+  .callout.xapi{background:var(--accent-soft)}
+  .callout.debug{background:var(--chip);border:1px solid var(--line)}
+  .callout h4{font-family:var(--serif);font-weight:500;font-size:16px;color:var(--ink);margin-bottom:8px}
+  .callout b{color:var(--ink)}
+  .callout code{font-family:var(--mono);font-size:11.5px;background:#fff;border:1px solid var(--line);padding:2px 6px;border-radius:4px;color:var(--ink)}
+  .callout.xapi code{background:#fff}
+  .callout ul{list-style:none;margin-top:4px}
+  .callout li{padding-left:20px;position:relative;margin-bottom:7px;line-height:1.5}
+  .callout li::before{content:"›";position:absolute;left:4px;color:var(--accent);font-weight:700}
+
+  /* reading */
+  .reads{margin-top:18px;font-family:var(--mono);font-size:12px;display:flex;flex-direction:column;gap:8px}
+  .reads a{color:var(--soft);text-decoration:none;border-bottom:1px dotted var(--faint);width:fit-content}
+  .reads a:hover{color:var(--accent)}
+
+  @media(max-width:620px){
+    .sheet{padding:32px 18px 56px}
+    .step .gist{padding-left:0}
+    pre,.out{font-size:11.5px}
+  }
+</style>
+</head>
+<body>
+<div class="sheet">
+
+  <div class="eyebrow">Stage 1 · Hands-on · DeepSeek</div>
+  <h1>用 DeepSeek 写一个最小 Agent</h1>
+  <p class="sub">六步,从「调一次 LLM」到「跑通一个带保险的 agent loop」。每步:可运行代码 + 一句原理 + 一个常见坑。DeepSeek 兼容 OpenAI 接口,所以用 <code>openai</code> 库,只改 <code>base_url</code>;模型 <code>deepseek-chat</code>。</p>
+
+  <div class="setup">
+    <span class="cmt"># 环境准备 / setup(绕开 conda,用 venv)</span><br>
+    python3 -m venv .venv &amp;&amp; <b>source</b> .venv/bin/activate<br>
+    pip install <b>openai python-dotenv</b> <span class="cmt">-i https://pypi.tuna.tsinghua.edu.cn/simple</span><br>
+    <b>echo</b> <span class="str">'DEEPSEEK_API_KEY=sk-xxxx'</span> &gt; .env <span class="cmt"># platform.deepseek.com</span>
+  </div>
+
+  <div class="rule"></div>
+
+  <div class="loop">
+    <span>Observe 观察</span><i>→</i><span>Think 思考</span><i>→</i><span>Act 行动</span><i>↻</i>
+  </div>
+
+  <!-- STEP 1 -->
+  <div class="step">
+    <div class="step-head"><span class="step-n">1</span><h2>普通对话<span class="en">Plain chat</span></h2></div>
+    <p class="gist"><b>原理:</b> <code>messages</code> 是 role/content 列表;回复从 <code>choices[0].message.content</code> 取。DeepSeek 客户端 = OpenAI 客户端 + 改 <code>base_url</code>。</p>
+<pre><span class="kw">import</span> os
+<span class="kw">from</span> dotenv <span class="kw">import</span> load_dotenv
+<span class="kw">from</span> openai <span class="kw">import</span> OpenAI
+
+load_dotenv()  <span class="com"># 从 .env 读 DEEPSEEK_API_KEY</span>
+
+client = <span class="fn">OpenAI</span>(
+    api_key=os.environ[<span class="str">"DEEPSEEK_API_KEY"</span>],
+    base_url=<span class="str">"https://api.deepseek.com"</span>,   <span class="com"># 指向 DeepSeek</span>
+)
+MODEL = <span class="str">"deepseek-chat"</span>
+
+resp = client.chat.completions.<span class="fn">create</span>(
+    model=MODEL,
+    messages=[{<span class="str">"role"</span>: <span class="str">"user"</span>, <span class="str">"content"</span>: <span class="str">"用一句话解释什么是 agent loop"</span>}],
+)
+<span class="fn">print</span>(resp.choices[<span class="num">0</span>].message.content)</pre>
+    <div class="note pit"><span class="ic">⚠</span><span><b>坑:</b> key 走 <code>.env</code>,别 <code>export</code> 在命令行(会进 history、易被截图)。<code>.env</code> 格式 <code>KEY=值</code>,等号两边无空格、不加引号。</span></div>
+  </div>
+
+  <!-- STEP 2 -->
+  <div class="step">
+    <div class="step-head"><span class="step-n">2</span><h2>结构化 JSON 输出<span class="en">Structured JSON</span></h2></div>
+    <p class="gist"><b>原理:</b> 用 <code>response_format={"type":"json_object"}</code> 强制合法 JSON,再 <code>json.loads</code> 解析。</p>
+<pre><span class="kw">import</span> json
+
+resp = client.chat.completions.<span class="fn">create</span>(
+    model=MODEL,
+    messages=[{<span class="str">"role"</span>: <span class="str">"user"</span>, <span class="str">"content"</span>:
+        <span class="str">"给我《盗梦空间》信息,以 json 返回,"</span>
+        <span class="str">"字段:title, year(整数), director"</span>}],
+    response_format={<span class="str">"type"</span>: <span class="str">"json_object"</span>},
+)
+data = json.<span class="fn">loads</span>(resp.choices[<span class="num">0</span>].message.content)
+<span class="fn">print</span>(data[<span class="str">"year"</span>])   <span class="com"># 2010</span></pre>
+    <div class="note pit"><span class="ic">⚠</span><span><b>DeepSeek 专属坑:</b> 用 JSON 模式时,<b>提示词里必须出现 "json" 字样并说明字段</b>,否则直接报错。生产仍要 <code>try/except</code> 包住解析(token 截断 → 半截 JSON)。</span></div>
+  </div>
+
+  <!-- STEP 3 -->
+  <div class="step">
+    <div class="step-head"><span class="step-n">3</span><h2>定义工具 + schema<span class="en">Define tools</span></h2></div>
+    <p class="gist"><b>原理:</b> OpenAI 风格接口要<b>手写 JSON schema</b>(不像 Gemini 自动从 docstring 生成)。<code>description</code> 就是给模型的说明书,决定它何时调、传什么参数。</p>
+<pre><span class="kw">def</span> <span class="fn">calculator</span>(expression: <span class="cls">str</span>) -> <span class="cls">float</span>:
+    <span class="kw">return</span> <span class="fn">eval</span>(expression, {<span class="str">"__builtins__"</span>: {}}, {})  <span class="com"># 仅演示</span>
+
+<span class="kw">def</span> <span class="fn">read_file</span>(path: <span class="cls">str</span>) -> <span class="cls">str</span>:
+    <span class="kw">with</span> <span class="fn">open</span>(path, encoding=<span class="str">"utf-8"</span>) <span class="kw">as</span> f:
+        <span class="kw">return</span> f.<span class="fn">read</span>()
+
+TOOLS = {<span class="str">"calculator"</span>: calculator, <span class="str">"read_file"</span>: read_file}
+
+TOOL_SCHEMAS = [{
+    <span class="str">"type"</span>: <span class="str">"function"</span>,
+    <span class="str">"function"</span>: {
+        <span class="str">"name"</span>: <span class="str">"calculator"</span>,
+        <span class="str">"description"</span>: <span class="str">"计算一个数学表达式并返回结果"</span>,
+        <span class="str">"parameters"</span>: {
+            <span class="str">"type"</span>: <span class="str">"object"</span>,
+            <span class="str">"properties"</span>: {<span class="str">"expression"</span>: {
+                <span class="str">"type"</span>: <span class="str">"string"</span>,
+                <span class="str">"description"</span>: <span class="str">"合法算术表达式,如 (128 + 64) * 3"</span>}},
+            <span class="str">"required"</span>: [<span class="str">"expression"</span>],
+        },
+    },
+}]  <span class="com"># read_file 同理,略</span></pre>
+    <div class="note pit"><span class="ic">⚠</span><span><b>坑:</b> <code>description</code> 含糊,模型就乱调或不调。每个参数的 <code>description</code> 要讲清,<code>required</code> 列出必填项。</span></div>
+  </div>
+
+  <!-- STEP 4 -->
+  <div class="step">
+    <div class="step-head"><span class="step-n">4</span><h2>解析 tool call<span class="en">Parse tool call</span></h2></div>
+    <p class="gist"><b>原理:</b> 模型不执行函数,只返回<b>意图</b> <code>message.tool_calls</code>。执行权在你手里 = act 入口。注意 <code>arguments</code> 是 <b>JSON 字符串</b>,要 <code>json.loads</code>。</p>
+<pre>resp = client.chat.completions.<span class="fn">create</span>(
+    model=MODEL,
+    messages=[{<span class="str">"role"</span>: <span class="str">"user"</span>, <span class="str">"content"</span>: <span class="str">"帮我算 (128 + 64) * 3"</span>}],
+    tools=TOOL_SCHEMAS,
+)
+msg = resp.choices[<span class="num">0</span>].message
+<span class="kw">if</span> msg.tool_calls:
+    <span class="kw">for</span> tc <span class="kw">in</span> msg.tool_calls:
+        <span class="fn">print</span>(tc.function.name)                       <span class="com"># "calculator"</span>
+        <span class="fn">print</span>(json.<span class="fn">loads</span>(tc.function.arguments))     <span class="com"># {'expression': ...}</span></pre>
+    <div class="note pit"><span class="ic">⚠</span><span><b>坑:</b> <code>tool_calls</code> 可能为 <code>None</code>(模型直接回答)或含多个(并行)。要<b>遍历 + 判空</b>,别写死取第一个。</span></div>
+  </div>
+
+  <!-- STEP 5 -->
+  <div class="step">
+    <div class="step-head"><span class="step-n">5</span><h2>执行工具 + 喂回结果<span class="en">Execute &amp; feed back</span></h2></div>
+    <p class="gist"><b>原理:</b> 一次工具调用 = 至少两次 API 调用。模型无记忆,每次带完整 <code>messages</code>;assistant 的 <code>tool_calls</code> 消息与 <code>role:"tool"</code> 结果消息<b>必须靠 <code>tool_call_id</code> 配对</b>。</p>
+<pre>messages = [{<span class="str">"role"</span>: <span class="str">"user"</span>, <span class="str">"content"</span>: <span class="str">"帮我算 (128 + 64) * 3"</span>}]
+
+resp = client.chat.completions.<span class="fn">create</span>(<span class="b">...</span>, messages=messages, tools=TOOL_SCHEMAS)
+msg = resp.choices[<span class="num">0</span>].message
+messages.<span class="fn">append</span>(msg)                       <span class="com"># assistant 回复入历史</span>
+
+<span class="kw">for</span> tc <span class="kw">in</span> msg.tool_calls:
+    args = json.<span class="fn">loads</span>(tc.function.arguments)
+    result = TOOLS[tc.function.name](**args)   <span class="com"># 真正执行</span>
+    messages.<span class="fn">append</span>({
+        <span class="str">"role"</span>: <span class="str">"tool"</span>,
+        <span class="str">"tool_call_id"</span>: tc.id,             <span class="com"># 必须与 call 对上</span>
+        <span class="str">"content"</span>: <span class="fn">str</span>(result),
+    })
+
+final = client.chat.completions.<span class="fn">create</span>(<span class="b">...</span>, messages=messages, tools=TOOL_SCHEMAS)
+<span class="fn">print</span>(final.choices[<span class="num">0</span>].message.content)   <span class="com"># "结果是 576"</span></pre>
+    <div class="note pit"><span class="ic">⚠</span><span><b>坑:</b> ① 忘了把 assistant 的 <code>tool_calls</code> 消息也 <code>append</code> 回历史、只加结果 → 报错。② <code>tool_call_id</code> 配错或漏写 → 报错。一问一答必须成对。</span></div>
+  </div>
+
+  <!-- STEP 6 -->
+  <div class="step">
+    <div class="step-head"><span class="step-n">6</span><h2>加固 agent loop<span class="en">Harden the loop</span></h2></div>
+    <p class="gist"><b>原理:</b> 套进 <code>while</code>,循环到模型不再发 <code>tool_calls</code> 为止。四道保险:最大步数、未知工具、单工具超时、异常不炸循环。</p>
+<pre><span class="kw">import</span> concurrent.futures
+
+<span class="kw">def</span> <span class="fn">run_agent</span>(user_input, max_steps=<span class="num">8</span>, tool_timeout=<span class="num">10</span>):
+    messages = [{<span class="str">"role"</span>: <span class="str">"user"</span>, <span class="str">"content"</span>: user_input}]
+
+    <span class="kw">for</span> step <span class="kw">in</span> <span class="fn">range</span>(max_steps):           <span class="com"># 保险1: 最大步数</span>
+        resp = client.chat.completions.<span class="fn">create</span>(
+            model=MODEL, messages=messages, tools=TOOL_SCHEMAS)
+        msg = resp.choices[<span class="num">0</span>].message
+        messages.<span class="fn">append</span>(msg)
+
+        <span class="kw">if</span> <span class="kw">not</span> msg.tool_calls:           <span class="com"># 无调用 = 最终答案</span>
+            <span class="kw">return</span> msg.content
+
+        <span class="kw">for</span> tc <span class="kw">in</span> msg.tool_calls:
+            <span class="kw">try</span>:
+                fn = TOOLS.<span class="fn">get</span>(tc.function.name)
+                <span class="kw">if</span> fn <span class="kw">is</span> <span class="num">None</span>:           <span class="com"># 保险2: 幻觉工具</span>
+                    <span class="kw">raise</span> <span class="cls">ValueError</span>(<span class="str">f"未知工具: {tc.function.name}"</span>)
+                args = json.<span class="fn">loads</span>(tc.function.arguments)
+                <span class="kw">with</span> concurrent.futures.<span class="fn">ThreadPoolExecutor</span>() <span class="kw">as</span> ex:
+                    fut = ex.<span class="fn">submit</span>(fn, **args)
+                    result = fut.<span class="fn">result</span>(timeout=tool_timeout)  <span class="com"># 保险3: 超时</span>
+                content = <span class="fn">str</span>(result)
+            <span class="kw">except</span> <span class="cls">Exception</span> <span class="kw">as</span> e:        <span class="com"># 保险4: 错误喂回,不炸循环</span>
+                content = <span class="str">f"ERROR: {e}"</span>
+
+            messages.<span class="fn">append</span>({<span class="str">"role"</span>: <span class="str">"tool"</span>,
+                <span class="str">"tool_call_id"</span>: tc.id, <span class="str">"content"</span>: content})
+
+    <span class="kw">return</span> <span class="str">"达到最大步数仍未完成"</span></pre>
+    <div class="note pit"><span class="ic">★</span><span><b>关键设计:</b> 工具报错时<b>把错误喂回模型</b>而非直接抛出 —— 模型看到 <code>ERROR: ...</code> 常能自己改参数重试。这正是 agent 比固定 workflow 更鲁棒的地方。</span></div>
+
+    <div class="note ok"><span class="ic">✓</span><span><b>实跑输出:</b> <code>run_agent("先算 (128+64)*3,再加 100")</code> → 模型连调两次 calculator:先得 576,喂回后再算 576+100,最终返回 <b>676</b>。多步循环 + 状态传递跑通。</span></div>
+  </div>
+
+  <div class="rule"></div>
+
+  <!-- SUMMARY -->
+  <div class="summary">
+    <h3>六步回顾</h3>
+    <table>
+      <thead><tr><th>步</th><th>能力</th><th>核心 API / 字段</th></tr></thead>
+      <tbody>
+        <tr><td>1</td><td>普通对话</td><td><code>chat.completions.create(messages=...)</code></td></tr>
+        <tr><td>2</td><td>结构化 JSON</td><td><code>response_format={"type":"json_object"}</code></td></tr>
+        <tr><td>3</td><td>定义工具</td><td>函数 + 手写 <code>TOOL_SCHEMAS</code></td></tr>
+        <tr><td>4</td><td>解析 tool call</td><td><code>message.tool_calls</code> + <code>json.loads(arguments)</code></td></tr>
+        <tr><td>5</td><td>执行 + 喂回</td><td><code>role:"tool"</code> + <code>tool_call_id</code></td></tr>
+        <tr><td>6</td><td>加固 loop</td><td><code>max_steps</code> / <code>timeout</code> / <code>try-except</code></td></tr>
+      </tbody>
+    </table>
+
+    <div class="callout xapi">
+      <h4>三家 API 迁移</h4>
+      骨架完全一样,差异只在 Step 4–5 的字段名。换字段即可迁移:
+      <ul>
+        <li><b>DeepSeek / OpenAI:</b> <code>tool_calls</code> / <code>role:"tool"</code> + <code>tool_call_id</code>;arguments 是 JSON 字符串</li>
+        <li><b>Gemini:</b> <code>function_call</code> / <code>function_response</code>;args 是 dict,工具 schema 自动从 docstring 生成</li>
+        <li><b>Claude:</b> <code>tool_use</code> / <code>tool_result</code></li>
+      </ul>
+    </div>
+
+    <div class="callout debug">
+      <h4>环境踩坑实录(大陆 / macOS)</h4>
+      <ul>
+        <li><b>conda 坏了不必修:</b> 报 <code>libarchive.20.dylib not found</code> 但仍输出版本号 = 能用,警告无视;直接 <code>conda deactivate</code> 用 venv 绕开</li>
+        <li><b>Google AI Studio 大陆不可用:</b> 地区限制,换直连的国产模型(DeepSeek)最省事</li>
+        <li><b>pip 报 SSL 证书错:</b> 多半是梯子作祟;关梯子 + 用清华源 <code>-i https://pypi.tuna.tsinghua.edu.cn/simple</code></li>
+        <li><b>401 invalid key:</b> 是 key 不是代码;最常见手抖 <code>sk-sk-</code> 开头重复,或账户没充值</li>
+        <li><b>git push 被拒:</b> 本地与远程历史分叉 → <code>git pull --allow-unrelated-histories</code> 先合并;<code>.gitignore</code> 冲突就重写一份(确保 <code>.env</code> 在内)</li>
+      </ul>
+    </div>
+
+    <div class="reads">
+      <a href="https://platform.deepseek.com/api-docs/" target="_blank" rel="noopener">↗ DeepSeek API Docs</a>
+      <a href="https://platform.openai.com/docs/guides/function-calling" target="_blank" rel="noopener">↗ OpenAI · Function Calling</a>
+      <a href="https://ai.google.dev/gemini-api/docs/function-calling" target="_blank" rel="noopener">↗ Gemini API · Function Calling</a>
+      <a href="https://docs.anthropic.com/en/docs/agents-and-tools/tool-use/overview" target="_blank" rel="noopener">↗ Claude · Tool Use</a>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>
